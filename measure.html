@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Measure</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14181f;--mut:#667085;--ac:#2563eb;--bd:#e2e5ea;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1218;--card:#181c25;--tx:#eef1f6;--mut:#98a2b3;--ac:#5b8cff;--bd:#2a303c}}
+:root[data-theme="dark"]{--bg:#0f1218;--card:#181c25;--tx:#eef1f6;--mut:#98a2b3;--ac:#5b8cff;--bd:#2a303c}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px system-ui,-apple-system,Segoe UI,sans-serif;padding:14px;max-width:520px;margin-inline:auto}
+h1{font-size:20px;margin:4px 0 12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{flex:1}
+button,select,input{font:inherit;color:var(--tx)}
+button{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;cursor:pointer}
+button.on,button.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+button:disabled{opacity:.5}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.big{font-size:38px;font-weight:700;letter-spacing:-.5px}
+.mut{color:var(--mut);font-size:14px}
+.row{display:flex;gap:8px;margin-top:10px}.row>*{flex:1}
+select,input{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px;width:100%}
+table{width:100%;border-collapse:collapse;margin-top:8px;font-size:15px}td{padding:4px 0;border-bottom:1px solid var(--bd)}td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.hide{display:none}
+#camwrap{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:3/4;margin-bottom:12px}
+video{width:100%;height:100%;object-fit:cover}
+.cross{position:absolute;inset:0;pointer-events:none}
+.cross:before,.cross:after{content:"";position:absolute;background:#ff3b30}
+.cross:before{left:0;right:0;top:50%;height:2px}.cross:after{top:0;bottom:0;left:50%;width:2px}
+#ang{position:absolute;top:8px;left:8px;background:#000a;color:#fff;padding:4px 10px;border-radius:8px;font-weight:600}
+label{font-size:13px;color:var(--mut);display:block;margin-top:10px}
+</style></head><body>
+<h1>📏 Measure</h1>
+<div class="tabs"><button id="t1" class="on">GPS distance</button><button id="t2">Height (camera)</button></div>
+<div class="card"><label style="margin:0">Display / input unit</label>
+<select id="unit"><option value="1">Metres (m)</option><option value="0.001">Kilometres (km)</option><option value="0.3048">Feet (ft)</option><option value="0.9144">Yards (yd)</option><option value="1609.344">Miles (mi)</option></select></div>
+
+<section id="p1">
+<div class="card">
+<div class="mut">Straight-line distance A → B</div>
+<div class="big" id="dist">—</div>
+<div class="mut" id="distm">Mark point A to begin</div>
+<div class="mut" id="err"></div>
+<div class="row"><button id="mA" class="pri">Mark A</button><button id="mB" disabled>Mark B</button></div>
+<div class="row"><button id="rst">Reset</button></div>
+<p class="mut" id="gps">GPS: not started</p>
+<p class="mut" id="prog"></p>
+</div>
+<div class="card"><b>All units</b><table id="tbl"></table></div>
+<p class="mut">Each mark averages GPS readings for ~10 seconds, weighting the more precise ones. Stand still and stay in the open for best results. Phone GPS is typically ±3–10 m, so short distances (under ~30 m) will be uncertain: for those, use a tape or the height tool's trig method.</p>
+</section>
+
+<section id="p2" class="hide">
+<div id="camwrap"><video id="vid" playsinline muted autoplay></video><div class="cross"></div><div id="ang">—°</div></div>
+<div class="row" style="margin:0 0 10px"><button id="cam" class="pri">Start camera + tilt</button></div>
+<div class="card">
+<label style="margin-top:0">Horizontal distance to object (in chosen unit)</label>
+<div class="row" style="margin-top:4px"><input id="dh" type="number" inputmode="decimal" placeholder="e.g. 20"><button id="useg">Use GPS distance</button></div>
+<label>Your eye height (in chosen unit)</label>
+<input id="eye" type="number" inputmode="decimal" value="1.6" step="0.01">
+<div class="row"><button id="cb">1. Aim at base</button><button id="ct">2. Aim at top</button></div>
+<div class="mut" style="margin-top:8px" id="hinfo">Put the red crosshair on the base of the object and tap 1, then on the top and tap 2. Skip step 1 if the base is at your eye level or use eye height.</div>
+<div class="big" id="hout" style="margin-top:8px">—</div>
+<div class="mut" id="houtm"></div>
+</div></section>
+
+<script>
+const $=id=>document.getElementById(id);
+const U=()=>parseFloat($('unit').value);
+const names={'1':'m','0.001':'km','0.3048':'ft','0.9144':'yd','1609.344':'mi'};
+const nm=()=>names[$('unit').value];
+const f=(m,d=2)=>{const v=m/U();return (Math.abs(v)>=100?v.toFixed(1):v.toFixed(d))+' '+nm()};
+try{const s=localStorage.getItem('unit');if(s)$('unit').value=s}catch(e){}
+$('unit').onchange=()=>{try{localStorage.setItem('unit',$('unit').value)}catch(e){};render();hrender()};
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);
+function tab(n){$('p1').classList.toggle('hide',n!=1);$('p2').classList.toggle('hide',n!=2);$('t1').classList.toggle('on',n==1);$('t2').classList.toggle('on',n==2)}
+
+// ---------- GPS ----------
+let A=null,B=null,last=null,watch=null,buf=null,live=null;
+const R=6371008.8;
+function hav(a,b){const r=x=>x*Math.PI/180;const dl=r(b.lat-a.lat),dn=r(b.lon-a.lon);
+ const h=Math.sin(dl/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+function startWatch(){
+ if(watch!==null)return;
+ if(!navigator.geolocation){$('gps').textContent='GPS: not supported here';return}
+ watch=navigator.geolocation.watchPosition(p=>{
+  last={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};
+  $('gps').textContent='GPS: ±'+last.acc.toFixed(1)+' m accuracy';
+  if(buf)buf.push(last);
+  if(A&&!B&&!buf){live=last;render()}
+ },e=>{$('gps').textContent='GPS error: '+e.message+' (allow location access)'},
+ {enableHighAccuracy:true,maximumAge:0,timeout:20000});
+}
+function average(pts){
+ const best=Math.min(...pts.map(p=>p.acc));
+ const g=pts.filter(p=>p.acc<=best*2);
+ let w=0,la=0,lo=0;g.forEach(p=>{const k=1/(p.acc*p.acc);w+=k;la+=p.lat*k;lo+=p.lon*k});
+ return{lat:la/w,lon:lo/w,acc:Math.max(Math.sqrt(1/w),best/Math.sqrt(g.length))*1.0,n:g.length};
+}
+function mark(which){
+ startWatch();const btn=which=='A'?$('mA'):$('mB');btn.disabled=true;buf=[];
+ let t=10;$('prog').textContent='Averaging… '+t+'s (stand still)';
+ const iv=setInterval(()=>{t--;$('prog').textContent='Averaging… '+t+'s  ('+buf.length+' fixes)';
+  if(t<=0){clearInterval(iv);const pts=buf;buf=null;
+   if(!pts.length){$('prog').textContent='No GPS fix. Check location permission and try again.';btn.disabled=false;return}
+   const r=average(pts);$('prog').textContent='Saved '+which+' from '+r.n+' fixes, ±'+r.acc.toFixed(1)+' m';
+   if(which=='A'){A=r;B=null;live=null;$('mB').disabled=false;$('mA').disabled=false}
+   else{B=r;$('mA').disabled=false;$('mB').disabled=false}
+   render();}},1000);
+}
+$('mA').onclick=()=>mark('A');$('mB').onclick=()=>mark('B');
+$('rst').onclick=()=>{A=B=live=null;$('mB').disabled=true;$('mA').disabled=false;$('prog').textContent='';render()};
+function curM(){if(A&&B)return{d:hav(A,B),e:Math.hypot(A.acc,B.acc)};if(A&&live)return{d:hav(A,live),e:Math.hypot(A.acc,live.acc),live:true};return null}
+function render(){
+ const c=curM();
+ if(!c){$('dist').textContent='—';$('distm').textContent=A?'A marked. Walk to B, then tap Mark B':'Mark point A to begin';$('err').textContent='';$('tbl').innerHTML='';return}
+ $('dist').textContent=f(c.d);$('distm').textContent=(c.d).toFixed(2)+' m'+(c.live?' (live from A)':'');
+ $('err').textContent='Estimated uncertainty ±'+c.e.toFixed(1)+' m';
+ $('tbl').innerHTML=[['Metres',c.d,1],['Kilometres',c.d,.001],['Feet',c.d,.3048],['Yards',c.d,.9144],['Miles',c.d,1609.344]].map(r=>'<tr><td>'+r[0]+'</td><td>'+(r[1]/r[2]).toFixed(r[2]>=1000||r[2]==.001?4:2)+'</td></tr>').join('');
+}
+
+// ---------- Height ----------
+let elev=null,capB=null,capT=null,stream=null;
+function onOri(e){if(e.beta==null)return;
+ // portrait: beta 90 = camera level; >90 tilts up
+ elev=e.beta-90;$('ang').textContent=elev.toFixed(1)+'°'}
+$('cam').onclick=async()=>{
+ try{
+  if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission){
+   const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw new Error('Motion permission denied')}
+  window.addEventListener('deviceorientation',onOri);
+ }catch(e){$('hinfo').textContent='Tilt sensor: '+e.message}
+ try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});$('vid').srcObject=stream;$('cam').textContent='Camera on'}
+ catch(e){$('hinfo').textContent='Camera unavailable: '+e.message+'. Tilt readout still works if allowed.'}
+};
+$('cb').onclick=()=>{if(elev==null)return;capB=elev;$('cb').textContent='Base: '+elev.toFixed(1)+'°';hrender()};
+$('ct').onclick=()=>{if(elev==null)return;capT=elev;$('ct').textContent='Top: '+elev.toFixed(1)+'°';hrender()};
+$('useg').onclick=()=>{const c=curM();if(c)$('dh').value=(c.d/U()).toFixed(2)};
+$('dh').oninput=hrender;$('eye').oninput=hrender;
+function hrender(){
+ const d=parseFloat($('dh').value)*U(),eye=parseFloat($('eye').value)*U()||0,r=x=>x*Math.PI/180;
+ if(!(d>0)||capT==null){$('hout').textContent='—';$('houtm').textContent='';return}
+ let h;
+ if(capB!=null)h=d*(Math.tan(r(capT))-Math.tan(r(capB)));
+ else h=d*Math.tan(r(capT))+eye;
+ $('hout').textContent=f(h);$('houtm').textContent=h.toFixed(2)+' m'+(capB!=null?' (base to top)':' (incl. eye height)');
+}
+render();
+</script></body></html>
